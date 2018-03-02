@@ -103,10 +103,16 @@ I case 3, to be completely correct you could check that user is not using rhel7 
         return False
 
     def fix_ifnames():
-        subprocess.call("./preupg_network.sh", shell=True)
-        return True
+        script_result = subprocess.Popen("./preupg_network.sh", shell=True)
+        script_result.communicate()
+        exit_code = script_result.returncode
+        if exit_code == 1:
+            log_extreme_risk("The network interface names on the source system are in inconsistent state. Upgrade is not possible")
+        elif exit_code == 2:
+            log_extreme_risk("MACADDR directive found in the ifcfg files. Comment it out and rerun preupgrade-assistant Upgrade is not possible")
 
     ethx_with_addr_count = 0
+    ethx_without_addr_count = 0
     ifnames_to_fix = 0
     warning = False
     for script in ls_scripts():
@@ -128,17 +134,18 @@ I case 3, to be completely correct you could check that user is not using rhel7 
                 if addr:
                     ethx_with_addr_count +=1
                 else:
+                    ethx_without_addr_count +=1
                     log_slight_risk(full_path + " is old style ethX name without HWADDR, its name can change after the upgrade.")
                     warning = True
             elif is_udev(name):
                 log_slight_risk(full_path + " variable DEVICE is similar to udev predictable network naming scheme. It might cause conflicts.")
                 warning = True
 
-        if ethx_with_addr_count > 1:
+        if 1 in (ethx_with_addr_count, ethx_without_addr_count) > 1:
             ifnames_to_fix +=1
             log_high_risk("You use multiple network devices with old style 'ethX' names.")
             warning = True
-        if ethx_with_addr_count == 1:
+        elif ethx_with_addr_count == 1:
             log_slight_risk("You use one network device with an old style 'ethX' name. This will work as long as you only have one, but it will break with multiple such devices.")
             warning = True
 
